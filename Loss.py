@@ -11,7 +11,7 @@ def KL_Distr(y_true, y_pred):
     # Scale predicted logits (HARD CODED)
     alpha_pred = tf.math.multiply(tf.math.divide(alpha_pred,
                                                  tf.reshape(tf.repeat(np.sum(alpha_pred, axis=1), repeats=y_true.shape[1]),
-                                                            shape=[-1,y_true.shape[1]])),
+                                                            shape=(-1,y_true.shape[1]))),
                                   18.5)
     alphas_prior = y_true
     comp_1 = tf.math.lgamma(tf.math.reduce_sum(alpha_pred, 1, keepdims=True))
