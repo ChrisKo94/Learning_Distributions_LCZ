@@ -1,7 +1,12 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow_probability as tfp
+from tensorflow.keras import backend as K
 from tensorflow.keras.losses import Loss
 
+# Todo: cross-check with jakob's code
+# Todo: Add mahalanobis, spectral angle, mse and others if needed
+'''
 def KL_Distr(y_true, y_pred):
 
     y_pred = tf.convert_to_tensor(y_pred)
@@ -27,4 +32,28 @@ def KL_Distr(y_true, y_pred):
              ),
         1, keepdims=True)
     return tf.math.add_n([comp_1,comp_2,comp_3,comp_4,comp_5])
+'''
 
+def dirichlet_kl_divergence(alpha_c_target, alpha_c_pred, eps=10e-10):
+
+    alpha_c_pred = tf.exp(alpha_c_pred/3)
+    alpha_0_target = tf.reduce_sum(alpha_c_target, axis=-1, keepdims=True)
+    alpha_0_pred = tf.reduce_sum(alpha_c_pred, axis=-1, keepdims=True)
+
+    term1 = tf.math.lgamma(alpha_0_target) - tf.math.lgamma(alpha_0_pred)
+    term2 = tf.math.lgamma(alpha_c_pred + eps) - tf.math.lgamma(alpha_c_target + eps)
+
+    term3_tmp = tf.math.digamma(alpha_c_target + eps) - tf.math.digamma(alpha_0_target + eps)
+    term3 = (alpha_c_target - alpha_c_pred) * term3_tmp
+
+    result = tf.squeeze(term1 + tf.reduce_sum(term2 + term3, keepdims=True, axis=-1))
+
+    return result
+
+def mahala_dist(m, n):
+    diff = m - n
+    cov = tfp.stats.covariance(tf.transpose(n))
+    mull = K.dot(tf.linalg.inv(cov), diff)
+    mull2 = K.dot(mull, tf.transpose(diff))
+    dist = tf.sqrt(mull2)
+    return dist

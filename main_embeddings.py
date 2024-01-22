@@ -1,12 +1,12 @@
 import model_softmax
-import model
+#import model
 import lr
 import numpy as np
 import pandas as pd
 import h5py
 
 from dataLoader import generator
-from Loss import KL_Distr
+from Loss import dirichlet_kl_divergence
 
 from utils import *
 
@@ -23,68 +23,50 @@ import os
 gpu = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpu[0], True)
 
+np.random.seed(42)
 
-########################################################################################################################
-################################ Data Generation (matching with Katharina's code) ######################################
-########################################################################################################################
+#Todo: Automatic Data read-in from h5 file
 
-city_list = ['berlin', 'cologne', 'london', 'madrid', 'milan', 'munich', 'paris', 'rome', 'zurich']
+data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
+patches = np.array(data_embedding.get("x"))
+labels = np.array(data_embedding.get("y"))
 
-# Define labels
-labels = np.arange(1,18)
+#Train Val Test Split
+shuffled_indices = np.random.permutation(patches.shape[0])
+patches = patches[shuffled_indices,:,:,:]
+labels = labels[shuffled_indices,:]
 
-cities_frames = [process_city(city) for city in city_list]
-cities_votes_named = pd.concat(cities_frames)
+# Temperature Scaling of exponentiated labels
+temperature = 3
+labels = np.exp(labels/temperature)
 
-cities_votes = pd.DataFrame(concatenate_cities(city_list).astype(int))
+# Softmax Trafo
+#labels = np.exp(labels) / np.sum(np.exp(labels), axis=1, keepdims=True)
 
-# to one hot
-
-cities_one_hot = pd.DataFrame(to_one_hot(cities_votes, labels))
-cities_one_hot_named = cities_one_hot.copy()
-cities_one_hot_named['City'] = np.array(cities_votes_named['City'])
-
-# Extract patches
-
-cities_patches = concatenate_cities_patches(city_list)
-indeces_out = np.array(cities_one_hot[cities_one_hot[6] != 0].index)
-cities_patches = np.delete(cities_patches, indeces_out, 0)
-# delete instances with vote for class 7
-
-cities_one_hot_16 = cities_one_hot.drop(cities_one_hot[cities_one_hot[6] != 0].index)
-cities_one_hot_16 = cities_one_hot_16.drop(columns=[6])
-
-katharina_embeddings = pd.read_csv("E:/Downloads/Archiv/df_z_full_all_img.csv")
-
-# 2. unique patterns with frequency for model ----------------------
-
-vote_patterns = np.unique(cities_one_hot_16, axis=0, return_inverse=True, return_counts=True)
-
-# 3. import csv of embeddings from R -------------------------------
-
-z_hat = pd.read_csv('E:/Downloads/Archiv/z_full.csv', ) #Todo: Change path to project dir
-
-z_hat = np.array(z_hat.drop(z_hat.columns[0], axis=1))
-
-mapping = vote_patterns[1]
-z_all_images = []
-for m in mapping:
-    z_all_images.append(z_hat[m])
-
-z_all_images = np.array(z_all_images)
+train_patches, val_patches, test_patches = np.split(patches, [int(.6*len(patches)), int(.8*len(patches))])
+train_labels, val_labels, test_labels = np.split(labels, [int(.6*len(labels)), int(.8*len(labels))])
 
 ########################################################################################################################
 ################################ Model Training ########################################################################
 ########################################################################################################################
+
+# Todo: def train_model based on setting_dict
+# Todo: training loop for multiple seeds or configs
 
 batchSize=64
 lrate = 0.0002
 
 file0 = 'C:/Users/kolle/PycharmProjects/Learning_Distributions_LCZ/results/embeddings/'
 
-model = model.sen2LCZ_drop(depth=17, dropRate=0.2, fusion=1, num_classes=16)
+model = model_softmax.sen2LCZ_drop(depth=17, dropRate=0.2, fusion=1, num_classes=16)
 
-model.compile(optimizer=Nadam(), loss='KLDivergence', metrics=['KLDivergence'])
+#model.compile(optimizer=Nadam(), loss='KLDivergence', metrics=['KLDivergence'])
+model.compile(optimizer=Nadam(),
+              #loss=dirichlet_kl_divergence, #Todo: Check following error: NotImplementedError: Cannot convert a symbolic Tensor (dirichlet_kl_divergence/truediv:0) to a numpy array. This error may indicate that you're trying to pass a Tensor to a NumPy call, which is not supported
+              loss=tf.keras.losses.MeanSquaredError(),
+              #metrics=[keras.metrics.mean_squared_error,
+              #         keras.metrics.mean_absolute_error]
+                       )
 
 lr_sched = lr.step_decay_schedule(initial_lr=lrate, decay_factor=0.5, step_size=5)
 early_stopping = EarlyStopping(monitor='val_loss', patience=40)
@@ -92,7 +74,9 @@ early_stopping = EarlyStopping(monitor='val_loss', patience=40)
 PATH = file0 + "Sen2LCZ_" + str(batchSize) + "_lr_" + str(lrate)
 modelbest = PATH + "_weights_best.hdf5"
 
-checkpoint = ModelCheckpoint(modelbest, monitor='val_kullback_leibler_divergence', verbose=1, save_best_only=True,
+#checkpoint = ModelCheckpoint(modelbest, monitor='val_kullback_leibler_divergence', verbose=1, save_best_only=True,
+#                             save_weights_only=True, mode='auto', save_freq='epoch')
+checkpoint = ModelCheckpoint(modelbest, monitor='val_loss', verbose=1, save_best_only=True,
                              save_weights_only=True, mode='auto', save_freq='epoch')
 '''
 # Try with subset
@@ -115,14 +99,17 @@ validation_data = h5py.File(validation_file, 'r')
 x_val = np.array(validation_data.get("sen2"))
 y_val = np.array(validation_data.get("y"))
 '''
-trainNumber=cities_patches.shape[0]
-#validationNumber=y_val.shape[0]
+trainNumber=train_patches.shape[0]
+validationNumber=val_patches.shape[0]
 
-model.fit(generator(cities_patches, z_all_images, batchSize=batchSize, num=trainNumber),
+model.fit(generator(train_patches, train_labels, batchSize=batchSize, num=trainNumber),
                 steps_per_epoch = trainNumber//batchSize,
-                #validation_data= generator(x_val, y_val, num=validationNumber, batchSize=batchSize),
-                #validation_steps = validationNumber//batchSize,
+                validation_data= generator(val_patches, val_labels, num=validationNumber, batchSize=batchSize),
+                validation_steps = validationNumber//batchSize,
                 epochs=100,
                 max_queue_size=100,
                 callbacks=[lr_sched])
                 #callbacks=[early_stopping, checkpoint, lr_sched])
+
+# Todo: Save model weights
+# Todo: Calibration analysis (here or separate script)

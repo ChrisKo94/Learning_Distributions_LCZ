@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 from operator import add
 import pandas as pd
+import tensorflow as tf
 
 def process_city(city):
     name_tmp = "E:/Dateien/LCZ_Votes/" + city + ".h5"
