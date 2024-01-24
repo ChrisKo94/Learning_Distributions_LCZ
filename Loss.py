@@ -16,7 +16,7 @@ def KL_Distr(y_true, y_pred):
     # Scale predicted logits (HARD CODED)
     alpha_pred = tf.math.multiply(tf.math.divide(alpha_pred,
                                                  tf.reshape(tf.repeat(np.sum(alpha_pred, axis=1), repeats=y_true.shape[1]),
-                                                            shape=(-1,y_true.shape[1]))),
+                                                            shape=[-1,y_true.shape[1]])),
                                   18.5)
     alphas_prior = y_true
     comp_1 = tf.math.lgamma(tf.math.reduce_sum(alpha_pred, 1, keepdims=True))
@@ -36,7 +36,7 @@ def KL_Distr(y_true, y_pred):
 
 def dirichlet_kl_divergence(alpha_c_target, alpha_c_pred, eps=10e-10):
 
-    alpha_c_pred = tf.exp(alpha_c_pred/3)
+    alpha_c_pred = tf.math.exp(alpha_c_pred)
     alpha_0_target = tf.reduce_sum(alpha_c_target, axis=-1, keepdims=True)
     alpha_0_pred = tf.reduce_sum(alpha_c_pred, axis=-1, keepdims=True)
 

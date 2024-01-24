@@ -1,3 +1,4 @@
+
 import model
 import model_softmax
 import model_softmax_regularized
@@ -19,15 +20,15 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 import os
 
 #os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-gpu = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpu[0], True)
+#gpu = tf.config.experimental.list_physical_devices('GPU')
+#tf.config.experimental.set_memory_growth(gpu[0], True)
 
 all_cities = False
 distributional = False
 dry_run = False
 distr_learning =True
 urban = True
-regularization = True
+regularization = False
 
 alpha = 0
 prior_parameter = 0.5
@@ -45,7 +46,6 @@ if all_cities:
     file0 = '/data/lcz42_votes/benchmark-on-So2SatLCZ42-dataset-a-simple-tour/results/all_cities/'
 else:
     file0 = '/data/lcz42_votes/benchmark-on-So2SatLCZ42-dataset-a-simple-tour/results/'
-
 file0 = 'C:/Users/kolle/PycharmProjects/Learning_Distributions_Sen2LCZ/results/'
 
 'path to data, needs to be set accordingly'
@@ -58,8 +58,8 @@ if all_cities:
 #    validation_file = '/data/lcz42_votes/data/validation_data.h5'
 #    path_data = "/data/lcz42_votes/data/"
 
-train_file = 'E:/Dateien/LCZ_Votes/train_data.h5'
-validation_file = 'E:/Dateien/LCZ_Votes/validation_data.h5'
+train_file = 'D:/Data/LCZ_Votes/train_data.h5'
+validation_file = 'D:/Data/LCZ_Votes/validation_data.h5'
 
 if urban:
     mode = "urban"

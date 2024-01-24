@@ -21,13 +21,13 @@ import os
 
 #os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 gpu = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpu[0], True)
+#tf.config.experimental.set_memory_growth(gpu[0], True)
 
 np.random.seed(42)
 
 #Todo: Automatic Data read-in from h5 file
 
-data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
+data_embedding = h5py.File('D:/Data/LCZ_Votes/embedding_data.h5', 'r')
 patches = np.array(data_embedding.get("x"))
 labels = np.array(data_embedding.get("y"))
 
@@ -37,7 +37,7 @@ patches = patches[shuffled_indices,:,:,:]
 labels = labels[shuffled_indices,:]
 
 # Temperature Scaling of exponentiated labels
-temperature = 3
+temperature = 1
 labels = np.exp(labels/temperature)
 
 # Softmax Trafo
@@ -62,8 +62,8 @@ model = model_softmax.sen2LCZ_drop(depth=17, dropRate=0.2, fusion=1, num_classes
 
 #model.compile(optimizer=Nadam(), loss='KLDivergence', metrics=['KLDivergence'])
 model.compile(optimizer=Nadam(),
-              #loss=dirichlet_kl_divergence, #Todo: Check following error: NotImplementedError: Cannot convert a symbolic Tensor (dirichlet_kl_divergence/truediv:0) to a numpy array. This error may indicate that you're trying to pass a Tensor to a NumPy call, which is not supported
-              loss=tf.keras.losses.MeanSquaredError(),
+              loss=dirichlet_kl_divergence, #Todo: Check following error: NotImplementedError: Cannot convert a symbolic Tensor (dirichlet_kl_divergence/truediv:0) to a numpy array. This error may indicate that you're trying to pass a Tensor to a NumPy call, which is not supported
+              #loss=tf.keras.losses.MeanSquaredError(),
               #metrics=[keras.metrics.mean_squared_error,
               #         keras.metrics.mean_absolute_error]
                        )
