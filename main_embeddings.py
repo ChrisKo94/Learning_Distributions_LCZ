@@ -25,9 +25,7 @@ gpu = tf.config.experimental.list_physical_devices('GPU')
 
 np.random.seed(42)
 
-#Todo: Automatic Data read-in from h5 file
-
-data_embedding = h5py.File('D:/Data/LCZ_Votes/embedding_data.h5', 'r')
+data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
 patches = np.array(data_embedding.get("x"))
 labels = np.array(data_embedding.get("y"))
 
@@ -37,7 +35,7 @@ patches = patches[shuffled_indices,:,:,:]
 labels = labels[shuffled_indices,:]
 
 # Temperature Scaling of exponentiated labels
-temperature = 1
+temperature = 3
 labels = np.exp(labels/temperature)
 
 # Softmax Trafo
@@ -62,14 +60,16 @@ model = model_softmax.sen2LCZ_drop(depth=17, dropRate=0.2, fusion=1, num_classes
 
 #model.compile(optimizer=Nadam(), loss='KLDivergence', metrics=['KLDivergence'])
 model.compile(optimizer=Nadam(),
-              loss=dirichlet_kl_divergence, #Todo: Check following error: NotImplementedError: Cannot convert a symbolic Tensor (dirichlet_kl_divergence/truediv:0) to a numpy array. This error may indicate that you're trying to pass a Tensor to a NumPy call, which is not supported
+              loss=dirichlet_kl_divergence, metrics=[dirichlet_kl_divergence]
               #loss=tf.keras.losses.MeanSquaredError(),
+              #loss=tf.keras.losses.CategoricalCrossentropy(),
+              #loss=tf.keras.losses.KLDivergence(),
               #metrics=[keras.metrics.mean_squared_error,
               #         keras.metrics.mean_absolute_error]
                        )
 
 lr_sched = lr.step_decay_schedule(initial_lr=lrate, decay_factor=0.5, step_size=5)
-early_stopping = EarlyStopping(monitor='val_loss', patience=40)
+early_stopping = EarlyStopping(monitor='val_loss', patience=50)
 
 PATH = file0 + "Sen2LCZ_" + str(batchSize) + "_lr_" + str(lrate)
 modelbest = PATH + "_weights_best.hdf5"
@@ -106,10 +106,28 @@ model.fit(generator(train_patches, train_labels, batchSize=batchSize, num=trainN
                 steps_per_epoch = trainNumber//batchSize,
                 validation_data= generator(val_patches, val_labels, num=validationNumber, batchSize=batchSize),
                 validation_steps = validationNumber//batchSize,
-                epochs=100,
+                epochs=20,
                 max_queue_size=100,
-                callbacks=[lr_sched])
-                #callbacks=[early_stopping, checkpoint, lr_sched])
+                #callbacks=[lr_sched])
+                callbacks=[early_stopping, checkpoint, lr_sched])
 
-# Todo: Save model weights
-# Todo: Calibration analysis (here or separate script)
+model.evaluate(test_patches, test_labels)
+# Test accuracy
+test_preds = model.predict(test_patches)
+test_preds_labels = np.argmax(test_preds, axis=1)
+test_labels_one_hot = np.argmax(test_labels, axis=1)
+test_acc = np.mean(test_preds_labels == test_labels_one_hot)
+
+# Validation accuracy
+val_preds = model.predict(val_patches)
+val_preds_labels = np.argmax(val_preds, axis=1)
+val_labels_one_hot = np.argmax(val_labels, axis=1)
+val_acc = np.mean(val_preds_labels == val_labels_one_hot)
+
+# Test ECE
+test_preds_softmax = np.exp(test_preds) / np.sum(np.exp(test_preds), axis=1, keepdims=True)
+test_ece = ECE(test_preds_softmax, test_labels_one_hot, 10)
+
+# Validation ECE
+val_preds_softmax = np.exp(val_preds) / np.sum(np.exp(val_preds), axis=1, keepdims=True)
+val_ece = ECE(val_preds_softmax, val_labels_one_hot, 10)

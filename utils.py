@@ -73,3 +73,30 @@ def generator(features, labels, batchSize=32, num=None, mode="all"):
             bx = features[batch_indices,:,:,:]
 
             yield (bx,by)
+
+def ECE(predictions, labels, bins):
+    """
+    Calculates the Expected Calibration Error of a set of predictions.
+    See https://arxiv.org/abs/1706.04599 for details.
+    :param predictions: matrix of softmax predictions, each row sums to 1.
+    :param labels: matrix of one-hot encoded labels. labels[i, j] = 1 iff i == j.
+    :param bins: number of confidence interval bins.
+    :return: Expected Calibration Error.
+    """
+    softmaxes = predictions
+    confidences = np.max(softmaxes, axis=1)
+    predictions = np.argmax(softmaxes, axis=1)
+    accuracies = predictions == labels
+
+    ece = 0
+    bin_size = 1 / bins
+    for bin_i in range(bins):
+        # Calculated |confidence - accuracy| in each bin
+        in_bin = (confidences >= bin_i * bin_size) & (confidences < (bin_i + 1) * bin_size)
+        prop_in_bin = np.mean(in_bin)
+        if prop_in_bin > 0:
+            accuracy_in_bin = np.mean(accuracies[in_bin])
+            avg_confidence_in_bin = np.mean(confidences[in_bin])
+            ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
+
+    return ece

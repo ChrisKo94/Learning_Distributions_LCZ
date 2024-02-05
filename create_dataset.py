@@ -53,7 +53,22 @@ for m in mapping:
 
 z_all_images = np.array(z_all_images)
 
+# 4. add distributional & one-hot labels  --------------------------
+
+cities_one_hot_16_majority = np.argmax(np.array(cities_one_hot_16), axis=1)
+
+one_hot_encoded_array = np.zeros((cities_one_hot_16_majority.size, cities_one_hot_16_majority.max()+1), dtype=int)
+
+#replacing 0 with a 1 at the index of the original array
+one_hot_encoded_array[np.arange(cities_one_hot_16_majority.size),cities_one_hot_16_majority] = 1
+
+distributional_array = np.array(cities_one_hot_16) / np.array(cities_one_hot_16).sum(axis=1)[:,None]
+
+# 5. save data -----------------------------------------------------
+
 data_h5 = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'w')
 data_h5.create_dataset('x', data=cities_patches)
 data_h5.create_dataset('y', data=z_all_images)
+data_h5.create_dataset('y_one_hot', data=one_hot_encoded_array)
+data_h5.create_dataset('y_distributional', data=distributional_array)
 data_h5.close()
