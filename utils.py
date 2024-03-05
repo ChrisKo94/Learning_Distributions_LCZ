@@ -100,3 +100,13 @@ def ECE(predictions, labels, bins):
             ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
 
     return ece
+
+def dirichlet_variance(dirichlet_params):
+    """
+    Calculates the variance of a Dirichlet distribution.
+    :param dirichlet_params: parameters of the Dirichlet distribution.
+    :return: variance of the Dirichlet distribution.
+    """
+    alpha = dirichlet_params
+    alpha0 = np.sum(alpha)
+    return alpha * (alpha0 - alpha) / (alpha0 ** 2 * (alpha0 + 1))

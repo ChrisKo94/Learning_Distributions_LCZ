@@ -171,7 +171,7 @@ def sen2LCZ_drop_core(inputs, num_classes=17, bn=1, depth=5, dim=16, dropRate=0.
     else:
         o=outputs
 
-    return o
+    return tf.cast(o, tf.float32)
 
 def sen2LCZ_drop(input_shape=(32,32,10), num_classes=17, bn=1, depth=5, dim=16, dropRate=0.1, fusion=0):
     """
