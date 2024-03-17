@@ -90,7 +90,7 @@ lr_sched = lr.step_decay_schedule(initial_lr=lrate, decay_factor=0.5, step_size=
 early_stopping = EarlyStopping(monitor='val_loss', patience=50)
 
 PATH = file0 + "Sen2LCZ_" + str(batchSize) + "_lr_" + str(lrate)
-modelbest = PATH + "_weights_best.hdf5"
+modelbest = PATH + "_weights_best_urban_id_train.hdf5"
 
 #checkpoint = ModelCheckpoint(modelbest, monitor='val_kullback_leibler_divergence', verbose=1, save_best_only=True,
 #                             save_weights_only=True, mode='auto', save_freq='epoch')
@@ -104,7 +104,7 @@ model.fit(generator(train_patches_id, train_labels_id, batchSize=batchSize, num=
                 steps_per_epoch = trainNumber//batchSize,
                 validation_data= generator(val_patches_id, val_labels_id, num=validationNumber, batchSize=batchSize),
                 validation_steps = validationNumber//batchSize,
-                epochs=20,
+                epochs=30,
                 max_queue_size=100,
                 #callbacks=[lr_sched])
                 callbacks=[early_stopping, checkpoint, lr_sched])

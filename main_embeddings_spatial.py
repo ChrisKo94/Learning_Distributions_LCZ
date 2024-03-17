@@ -6,7 +6,7 @@ import pandas as pd
 import h5py
 
 from dataLoader import generator
-from Loss import dirichlet_kl_divergence, mahala_dist
+from Loss import dirichlet_kl_divergence, mahala_dist_cov, mahala_dist_corr
 
 from utils import *
 
@@ -128,7 +128,7 @@ model = model_softmax.sen2LCZ_drop(depth=17, dropRate=0.2, fusion=1, num_classes
 #model.compile(optimizer=Nadam(), loss='KLDivergence', metrics=['KLDivergence'])
 model.compile(optimizer=Nadam(),
               #loss=dirichlet_kl_divergence, metrics=[dirichlet_kl_divergence]
-              loss= mahala_dist, metrics=[mahala_dist]
+              loss= mahala_dist_corr, metrics=[mahala_dist_corr]
               #loss=tf.keras.losses.MeanSquaredError(),
               #loss=tf.keras.losses.CategoricalCrossentropy(),
               #loss=tf.keras.losses.KLDivergence(),
@@ -174,7 +174,7 @@ model.fit(generator(train_patches, train_labels, batchSize=batchSize, num=trainN
                 steps_per_epoch = trainNumber//batchSize,
                 validation_data= generator(val_patches, val_labels, num=validationNumber, batchSize=batchSize),
                 validation_steps = validationNumber//batchSize,
-                epochs=20,
+                epochs=30,
                 max_queue_size=100,
                 #callbacks=[lr_sched])
                 callbacks=[early_stopping, checkpoint, lr_sched])
