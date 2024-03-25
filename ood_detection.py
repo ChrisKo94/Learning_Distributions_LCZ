@@ -8,6 +8,9 @@ import h5py
 from dataLoader import generator
 from Loss import dirichlet_kl_divergence
 from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
+import scipy
+import scipy.stats
+import scipy.special
 
 from utils import *
 
@@ -23,22 +26,23 @@ import os
 import matplotlib.pyplot as plt
 
 #os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-gpu = tf.config.experimental.list_physical_devices('GPU')
+#gpu = tf.config.experimental.list_physical_devices('GPU')
 #tf.config.experimental.set_memory_growth(gpu[0], True)
 
 np.random.seed(42)
-
-data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
+# Todo: Change data dir
+data_embedding = h5py.File('D:/Data/LCZ_Votes/embedding_data.h5', 'r')
 patches = np.array(data_embedding.get("x"))
 labels = np.array(data_embedding.get("y"))
-one_hot_labels = np.array(data_embedding.get("y_one_hot"))
+#one_hot_labels = np.array(data_embedding.get("y_one_hot"))
 
 # ID and OOD Split
 # ID: 0-9, OOD: 10-16
-id_indices = np.where(one_hot_labels[:,0:9] == 1)[0]
-ood_indices = np.where(one_hot_labels[:,9:16] == 1)[0]
+#id_indices = np.where(one_hot_labels[:,0:9] == 1)[0]
+#ood_indices = np.where(one_hot_labels[:,9:16] == 1)[0]
 
-
+id_indices=np.where(np.argmax(labels, 1) < 10)[0]
+ood_indices=np.where(np.argmax(labels,1)>9)[0]
 #Train Val Test Split ID
 patches_id = patches[id_indices,:,:,:]
 labels_id = labels[id_indices,:9]
@@ -72,10 +76,18 @@ train_labels_ood, val_labels_ood, test_labels_ood = np.split(labels_ood, [int(.6
 batchSize=64
 lrate = 0.0002
 
-file0 = 'C:/Users/kolle/PycharmProjects/Learning_Distributions_LCZ/results/embeddings/'
+# Todo: Change back path
+file0 = 'C:/Users/koll_ch/PycharmProjects/Learning_Distributions_LCZ/results/embeddings/'
+
+PATH = file0 + "Sen2LCZ_" + str(batchSize) + "_lr_" + str(lrate)
+modelbest = PATH + "_weights_best_urban_id_train.hdf5"
 
 model = model_softmax.sen2LCZ_drop(depth=17, dropRate=0.2, fusion=1, num_classes=9)
 
+### Special case: Pretrained model
+model.load_weights(modelbest, by_name=False)
+
+'''
 #model.compile(optimizer=Nadam(), loss='KLDivergence', metrics=['KLDivergence'])
 model.compile(optimizer=Nadam(),
               loss=dirichlet_kl_divergence, metrics=[dirichlet_kl_divergence]
@@ -88,9 +100,6 @@ model.compile(optimizer=Nadam(),
 
 lr_sched = lr.step_decay_schedule(initial_lr=lrate, decay_factor=0.5, step_size=5)
 early_stopping = EarlyStopping(monitor='val_loss', patience=50)
-
-PATH = file0 + "Sen2LCZ_" + str(batchSize) + "_lr_" + str(lrate)
-modelbest = PATH + "_weights_best_urban_id_train.hdf5"
 
 #checkpoint = ModelCheckpoint(modelbest, monitor='val_kullback_leibler_divergence', verbose=1, save_best_only=True,
 #                             save_weights_only=True, mode='auto', save_freq='epoch')
@@ -108,7 +117,7 @@ model.fit(generator(train_patches_id, train_labels_id, batchSize=batchSize, num=
                 max_queue_size=100,
                 #callbacks=[lr_sched])
                 callbacks=[early_stopping, checkpoint, lr_sched])
-
+'''
 id_test_preds = model.predict(test_patches_id)
 ood_test_preds = model.predict(test_patches_ood)
 id_test_preds = id_test_preds[:10000,:]
@@ -120,8 +129,8 @@ id_params_scaled = np.exp(id_test_preds*temperature)
 ood_params = np.exp(ood_test_preds)
 ood_params_scaled = np.exp(ood_test_preds*temperature)
 
+'''
 id_variances = dirichlet_variance(np.exp(id_test_preds))
-
 
 ood_variances = dirichlet_variance(np.exp(ood_test_preds))
 
@@ -135,4 +144,25 @@ plt.show()
 
 plt.boxplot([ood_variances[:,0], ood_variances[:,1], ood_variances[:,2], ood_variances[:,3], ood_variances[:,4],
                 ood_variances[:,5], ood_variances[:,6], ood_variances[:,7], ood_variances[:,8]])
+plt.show()
+'''
+
+# Sampling pi's
+
+sampled_pis_id = np.array([])
+
+for i in range(len(id_params_scaled)):
+    sampled_pis_id = np.append(sampled_pis_id, scipy.stats.entropy(np.random.dirichlet(id_params_scaled[i])))
+
+
+sampled_pis_ood = np.array([])
+
+for i in range(len(ood_params_scaled)):
+    sampled_pis_ood = np.append(sampled_pis_ood, scipy.stats.entropy(np.random.dirichlet(ood_params_scaled[i])))
+
+# Plot histogram of sampled pi's id and ood
+
+plt.hist(sampled_pis_id, bins=100, alpha=0.5, label='ID')
+plt.hist(sampled_pis_ood, bins=100, alpha=0.5, label='OOD')
+plt.legend(loc='upper right')
 plt.show()
