@@ -127,8 +127,8 @@ model = model_softmax.sen2LCZ_drop(depth=17, dropRate=0.2, fusion=1, num_classes
 
 #model.compile(optimizer=Nadam(), loss='KLDivergence', metrics=['KLDivergence'])
 model.compile(optimizer=Nadam(),
-              #loss=dirichlet_kl_divergence, metrics=[dirichlet_kl_divergence]
-              loss= mahala_dist_corr, metrics=[mahala_dist_corr]
+              loss=dirichlet_kl_divergence, metrics=[dirichlet_kl_divergence]
+              #loss= mahala_dist_corr, metrics=[mahala_dist_corr]
               #loss=tf.keras.losses.MeanSquaredError(),
               #loss=tf.keras.losses.CategoricalCrossentropy(),
               #loss=tf.keras.losses.KLDivergence(),

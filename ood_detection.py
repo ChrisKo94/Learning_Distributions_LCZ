@@ -6,7 +6,7 @@ import pandas as pd
 import h5py
 
 from dataLoader import generator
-from Loss import dirichlet_kl_divergence
+from Loss import dirichlet_kl_divergence, mahala_dist_cov, mahala_dist_corr
 from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 import scipy
 import scipy.stats
@@ -31,9 +31,10 @@ import matplotlib.pyplot as plt
 
 np.random.seed(42)
 # Todo: Change data dir
-data_embedding = h5py.File('D:/Data/LCZ_Votes/embedding_data.h5', 'r')
+data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
 patches = np.array(data_embedding.get("x"))
-labels = np.array(data_embedding.get("y"))
+# Check if correct!!
+labels = np.array(data_embedding.get("y_distributional"))
 #one_hot_labels = np.array(data_embedding.get("y_one_hot"))
 
 # ID and OOD Split
@@ -60,9 +61,9 @@ patches_ood = patches_ood[shuffled_indices_ood,:,:,:]
 labels_ood = labels_ood[shuffled_indices_ood,:]
 
 # Temperature Scaling of exponentiated labels
-temperature = 3
-labels_id = np.exp(labels_id/temperature)
-labels_ood = np.exp(labels_ood/temperature)
+#temperature = 3
+#labels_id = np.exp(labels_id/temperature)
+#labels_ood = np.exp(labels_ood/temperature)
 
 # Softmax Trafo
 #labels = np.exp(labels) / np.sum(np.exp(labels), axis=1, keepdims=True)
@@ -77,23 +78,25 @@ batchSize=64
 lrate = 0.0002
 
 # Todo: Change back path
-file0 = 'C:/Users/koll_ch/PycharmProjects/Learning_Distributions_LCZ/results/embeddings/'
+file0 = 'C:/Users/kolle/PycharmProjects/Learning_Distributions_LCZ/results/embeddings/'
 
 PATH = file0 + "Sen2LCZ_" + str(batchSize) + "_lr_" + str(lrate)
-modelbest = PATH + "_weights_best_urban_id_train.hdf5"
+modelbest = PATH + "_weights_best_urban_id_train_distributional_kl.hdf5"
 
 model = model_softmax.sen2LCZ_drop(depth=17, dropRate=0.2, fusion=1, num_classes=9)
-
+#model = tf.keras.applications.ResNet50(include_top=True, weights='imagenet', input_tensor=None,classifier_activation=None,
+#                                       input_shape=(32,32,3), pooling=None, classes=9)
 ### Special case: Pretrained model
-model.load_weights(modelbest, by_name=False)
+#model.load_weights(modelbest, by_name=False)
 
-'''
+
 #model.compile(optimizer=Nadam(), loss='KLDivergence', metrics=['KLDivergence'])
 model.compile(optimizer=Nadam(),
-              loss=dirichlet_kl_divergence, metrics=[dirichlet_kl_divergence]
+              #loss=dirichlet_kl_divergence, metrics=[dirichlet_kl_divergence]
+              #loss= mahala_dist_corr, metrics=[mahala_dist_corr]
               #loss=tf.keras.losses.MeanSquaredError(),
               #loss=tf.keras.losses.CategoricalCrossentropy(),
-              #loss=tf.keras.losses.KLDivergence(),
+              loss=tf.keras.losses.KLDivergence(),
               #metrics=[keras.metrics.mean_squared_error,
               #         keras.metrics.mean_absolute_error]
                        )
@@ -117,7 +120,7 @@ model.fit(generator(train_patches_id, train_labels_id, batchSize=batchSize, num=
                 max_queue_size=100,
                 #callbacks=[lr_sched])
                 callbacks=[early_stopping, checkpoint, lr_sched])
-'''
+
 id_test_preds = model.predict(test_patches_id)
 ood_test_preds = model.predict(test_patches_ood)
 id_test_preds = id_test_preds[:10000,:]

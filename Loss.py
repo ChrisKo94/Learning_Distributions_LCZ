@@ -189,6 +189,9 @@ def mahala_dist_corr(m, n):
         -0.01699723, -0.04315624,  0.08961217, -0.37031642,  0.4726835 ,
          0.12131476,  0.09756274,  0.26665525,  0.16657644, -0.17493192,
          1.        ]]).astype(np.float32)
+    # ONLY FOR ID/OOD SPLIT!!!!
+    #corr_mat = corr_mat[:9,:9]
+    #corr_mat = corr_mat[10:16,10:16]
     corr_mat = tf.convert_to_tensor(corr_mat)
     mull = tf.tensordot(diff, tf.linalg.inv(corr_mat), axes=1)
     mull2 = tf.tensordot(mull,tf.transpose(diff),axes=1)
