@@ -90,14 +90,30 @@ ind_out = np.array([ 16455,  16456,  16457,  16495,  16496,  16497,  16498,  164
 
 cities_geo = np.delete(cities_geo, ind_out, 0)
 
+data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
+patches = np.array(data_embedding.get("x"))
+patches_train = patches[cities_geo == 1]
+patches_test = patches[cities_geo == 0]
+
+np.random.seed(42)
+shuffled_indices_train = np.random.permutation(patches_train.shape[0])
+patches_train = patches_train[shuffled_indices_train, :, :, :]
+
+np.random.seed(42)
+shuffled_indices_test = np.random.permutation(patches_test.shape[0])
+patches_test = patches_test[shuffled_indices_test, :, :, :]
+
+train_patches, val_patches = np.split(patches_train, [int(.75 * len(patches_train))])
+
+trainNumber = train_patches.shape[0]
+validationNumber = val_patches.shape[0]
+
 ########################################################################################################################
 ################################ Model Training ########################################################################
 ########################################################################################################################
 
 def train_model(setting_dict: dict):
     # zeroes mean test, ones mean train
-    data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
-    patches = np.array(data_embedding.get("x"))
 
     seed = setting_dict["Seed"]
 
@@ -175,34 +191,17 @@ def train_model(setting_dict: dict):
                                    patience=setting_dict["Optimization"]["patience"])
     ckpt_file = Path(path, "results", f"Sen2LCZ_bs_{batchSize}_lr_{lrate}_seed_{seed}_weights_best_{mode}.hdf5")
 
-    patches_train = patches[cities_geo == 1]
     labels_train = labels[cities_geo == 1]
-
-    patches_test = patches[cities_geo == 0]
     labels_test = labels[cities_geo == 0]
 
     # Train Val Test Split
-    np.random.seed(42)
 
-    shuffled_indices_train = np.random.permutation(patches_train.shape[0])
-    patches_train = patches_train[shuffled_indices_train, :, :, :]
     labels_train = labels_train[shuffled_indices_train, :]
 
-    np.random.seed(42)
-
-    shuffled_indices_test = np.random.permutation(patches_test.shape[0])
-    patches_test = patches_test[shuffled_indices_test, :, :, :]
     labels_test = labels_test[shuffled_indices_test, :]
 
     # split train into train and val
-    train_patches, val_patches = np.split(patches_train, [int(.75 * len(patches_train))])
     train_labels, val_labels = np.split(labels_train, [int(.75 * len(labels_train))])
-
-    y_train_actual = train_labels
-    y_val_actual = val_labels
-
-    trainNumber = train_patches.shape[0]
-    validationNumber = val_patches.shape[0]
 
     checkpoint = ModelCheckpoint(
         ckpt_file,
@@ -222,24 +221,18 @@ def train_model(setting_dict: dict):
     os.environ['PYTHONHASHSEED'] = '0'
 
     model.fit(generator(train_patches,
-                        y_train_actual,
+                        train_labels,
                         batchSize=batchSize,
                         num=trainNumber),
               steps_per_epoch=trainNumber // batchSize,
               validation_data=generator(val_patches,
-                                        y_val_actual,
+                                        val_labels,
                                         num=validationNumber,
                                         batchSize=batchSize),
               validation_steps=validationNumber // batchSize,
               epochs=setting_dict["Trainer"]["max_epochs"],
               max_queue_size=100,
               callbacks=[early_stopping, checkpoint, lr_sched])
-
-    del data_embedding
-    del patches
-    del patches_train
-    del train_patches
-    del val_patches
 
     gc.collect()
 
@@ -255,8 +248,8 @@ args = parser.parse_args()
 ## Train models ##
 
 if __name__ == "__main__":
-    for mode in ["distributional", "dirichlet", "Dirichlet_embedding", "MSE_embedding", "Mahala_embedding"]: #"one-hot",
-        for seed in range(3):
+    for mode in ["one-hot", "distributional", "dirichlet", "Dirichlet_embedding", "MSE_embedding", "Mahala_embedding"]:
+        for seed in range(1):
             setting_dict["Seed"] = seed
             setting_dict["Data"]["mode"] = mode
             train_model(setting_dict)
