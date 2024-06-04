@@ -1,6 +1,6 @@
 
-import model
-import model_softmax
+import model_with_softmax
+import model_without_softmax
 import model_softmax_regularized
 import lr
 import h5py

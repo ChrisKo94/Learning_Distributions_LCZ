@@ -1,9 +1,17 @@
-import model_softmax
+import os
+import argparse
+import yaml
+import random as rn
+from numpy import random
+from pathlib import Path
+import model_without_softmax
+import model_with_softmax
 #import model
 import lr
 import numpy as np
 import pandas as pd
 import h5py
+import gc
 
 from dataLoader import generator
 from Loss import dirichlet_kl_divergence, mahala_dist_cov, mahala_dist_corr
@@ -23,7 +31,10 @@ import os
 gpu = tf.config.experimental.list_physical_devices('GPU')
 #tf.config.experimental.set_memory_growth(gpu[0], True)
 
-np.random.seed(42)
+## Set path ##
+path = os.getcwd()
+results_dir = Path(path, 'results')
+results_dir.mkdir(parents=True, exist_ok=True)
 
 city_list = ['berlin', 'cologne', 'london', 'madrid', 'milan', 'munich', 'paris', 'rome', 'zurich']
 
@@ -79,45 +90,178 @@ ind_out = np.array([ 16455,  16456,  16457,  16495,  16496,  16497,  16498,  164
 
 cities_geo = np.delete(cities_geo, ind_out, 0)
 
-# zeroes mean test, ones mean train
-data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
-patches = np.array(data_embedding.get("x"))
-labels = np.array(data_embedding.get("y")).astype(np.float32)
-
-# import correlation matrix
-corr_mat = pd.read_csv('E:/Dateien/LCZ_Votes/embeddings_correlation.csv')
-corr_mat = np.array(corr_mat.drop(corr_mat.columns[0], axis=1))
-
-# Temperature Scaling of exponentiated labels
-#temperature = 3
-#labels = np.exp(labels/temperature)
-
-patches_train = patches[cities_geo == 1]
-labels_train = labels[cities_geo == 1]
-
-patches_test = patches[cities_geo == 0]
-labels_test = labels[cities_geo == 0]
-
-#Train Val Test Split
-shuffled_indices_train = np.random.permutation(patches_train.shape[0])
-patches_train = patches_train[shuffled_indices_train,:,:,:]
-labels_train = labels_train[shuffled_indices_train,:]
-
-shuffled_indices_test = np.random.permutation(patches_test.shape[0])
-patches_test = patches_test[shuffled_indices_test,:,:,:]
-labels_test = labels_test[shuffled_indices_test,:]
-
-# split train into train and val
-train_patches, val_patches = np.split(patches_train, [int(.75*len(patches_train))])
-train_labels, val_labels = np.split(labels_train, [int(.75*len(labels_train))])
-
 ########################################################################################################################
 ################################ Model Training ########################################################################
 ########################################################################################################################
 
-# Todo: def train_model based on setting_dict
-# Todo: training loop for multiple seeds or configs
+def train_model(setting_dict: dict):
+    # zeroes mean test, ones mean train
+    data_embedding = h5py.File('E:/Dateien/LCZ_Votes/embedding_data.h5', 'r')
+    patches = np.array(data_embedding.get("x"))
 
+    seed = setting_dict["Seed"]
+
+    if mode == "one-hot":
+        model = model_with_softmax.sen2LCZ_drop(depth=17,
+                                           dropRate=setting_dict["Data"]["dropout"],
+                                           fusion=setting_dict["Data"]["fusion"],
+                                           num_classes=setting_dict["Data"]["num_classes"])
+        model.compile(optimizer=Nadam(),
+                      loss=keras.losses.CategoricalCrossentropy(),
+                      metrics=['accuracy'])
+        labels = np.array(data_embedding.get("y_one_hot")).astype(np.float32)
+    elif mode == "distributional":
+        model = model_with_softmax.sen2LCZ_drop(depth=17,
+                                                dropRate=setting_dict["Data"]["dropout"],
+                                                fusion=setting_dict["Data"]["fusion"],
+                                                num_classes=setting_dict["Data"]["num_classes"])
+        model.compile(optimizer=Nadam(),
+                      loss='KLDivergence',
+                      metrics=['KLDivergence'])
+        labels = np.array(data_embedding.get("y_distributional")).astype(np.float32)
+    elif mode == "dirichlet":
+        model = model_without_softmax.sen2LCZ_drop(depth=17,
+                                                dropRate=setting_dict["Data"]["dropout"],
+                                                fusion=setting_dict["Data"]["fusion"],
+                                                num_classes=setting_dict["Data"]["num_classes"])
+        model.compile(optimizer=Nadam(),
+                      loss=dirichlet_kl_divergence,
+                      metrics=[dirichlet_kl_divergence])
+        labels = np.array(data_embedding.get("y_one_hot")).astype(np.float32)
+        # 11 vote counts -> * 11, c=1 -> + 1
+        labels = labels*11 + 1
+        # Temperature Scaling of exponentiated labels w/ temperature = 3
+        labels = np.exp(labels / 3)
+    elif mode == "Dirichlet_embedding":
+        model = model_without_softmax.sen2LCZ_drop(depth=17,
+                                                   dropRate=setting_dict["Data"]["dropout"],
+                                                   fusion=setting_dict["Data"]["fusion"],
+                                                   num_classes=setting_dict["Data"]["num_classes"])
+        model.compile(optimizer=Nadam(),
+                      loss=dirichlet_kl_divergence,
+                      metrics=[dirichlet_kl_divergence])
+        labels = np.array(data_embedding.get("y")).astype(np.float32)
+        # Temperature Scaling of exponentiated labels w/ temperature = 3
+        labels = np.exp(labels/3)
+
+    elif mode == "MSE_embedding":
+        model = model_without_softmax.sen2LCZ_drop(depth=17,
+                                                   dropRate=setting_dict["Data"]["dropout"],
+                                                   fusion=setting_dict["Data"]["fusion"],
+                                                   num_classes=setting_dict["Data"]["num_classes"])
+        model.compile(optimizer=Nadam(),
+                      loss=tf.keras.losses.MeanSquaredError(),
+                      metrics=[tf.keras.losses.MeanSquaredError()])
+        labels = np.array(data_embedding.get("y")).astype(np.float32)
+    elif mode == "Mahala_embedding":
+        model = model_without_softmax.sen2LCZ_drop(depth=17,
+                                                   dropRate=setting_dict["Data"]["dropout"],
+                                                   fusion=setting_dict["Data"]["fusion"],
+                                                   num_classes=setting_dict["Data"]["num_classes"])
+        model.compile(optimizer=Nadam(),
+                      loss=mahala_dist_corr,
+                      metrics=[mahala_dist_corr])
+        labels = np.array(data_embedding.get("y")).astype(np.float32)
+    print("Model compiled")
+
+    batchSize = setting_dict["Data"]["train_batch_size"]
+    lrate = setting_dict["Optimization"]["lr"]
+
+    lr_sched = lr.step_decay_schedule(initial_lr=lrate,
+                                      decay_factor=0.5,
+                                      step_size=5)
+
+    early_stopping = EarlyStopping(monitor='val_loss',
+                                   patience=setting_dict["Optimization"]["patience"])
+    ckpt_file = Path(path, "results", f"Sen2LCZ_bs_{batchSize}_lr_{lrate}_seed_{seed}_weights_best_{mode}.hdf5")
+
+    patches_train = patches[cities_geo == 1]
+    labels_train = labels[cities_geo == 1]
+
+    patches_test = patches[cities_geo == 0]
+    labels_test = labels[cities_geo == 0]
+
+    # Train Val Test Split
+    np.random.seed(42)
+
+    shuffled_indices_train = np.random.permutation(patches_train.shape[0])
+    patches_train = patches_train[shuffled_indices_train, :, :, :]
+    labels_train = labels_train[shuffled_indices_train, :]
+
+    np.random.seed(42)
+
+    shuffled_indices_test = np.random.permutation(patches_test.shape[0])
+    patches_test = patches_test[shuffled_indices_test, :, :, :]
+    labels_test = labels_test[shuffled_indices_test, :]
+
+    # split train into train and val
+    train_patches, val_patches = np.split(patches_train, [int(.75 * len(patches_train))])
+    train_labels, val_labels = np.split(labels_train, [int(.75 * len(labels_train))])
+
+    y_train_actual = train_labels
+    y_val_actual = val_labels
+
+    trainNumber = train_patches.shape[0]
+    validationNumber = val_patches.shape[0]
+
+    checkpoint = ModelCheckpoint(
+        ckpt_file,
+        monitor='val_loss',
+        verbose=1,
+        save_best_only=True,
+        save_weights_only=True,
+        mode='auto',
+        save_freq='epoch')
+
+    print("Callbacks and checkpoint initialized")
+
+    ## Reproducibility
+    random.seed(seed)
+    rn.seed(seed)
+    tf.random.set_seed(seed)
+    os.environ['PYTHONHASHSEED'] = '0'
+
+    model.fit(generator(train_patches,
+                        y_train_actual,
+                        batchSize=batchSize,
+                        num=trainNumber),
+              steps_per_epoch=trainNumber // batchSize,
+              validation_data=generator(val_patches,
+                                        y_val_actual,
+                                        num=validationNumber,
+                                        batchSize=batchSize),
+              validation_steps=validationNumber // batchSize,
+              epochs=setting_dict["Trainer"]["max_epochs"],
+              max_queue_size=100,
+              callbacks=[early_stopping, checkpoint, lr_sched])
+
+    del data_embedding
+    del patches
+    del patches_train
+    del train_patches
+    del val_patches
+
+    gc.collect()
+
+## Load settings dictionary ##
+
+with open("configs/model_settings.yaml", 'r') as fp:
+    setting_dict = yaml.load(fp, Loader=yaml.FullLoader)
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--single_run', type=bool, required=False, default = False)
+args = parser.parse_args()
+
+## Train models ##
+
+if __name__ == "__main__":
+    for mode in ["distributional", "dirichlet", "Dirichlet_embedding", "MSE_embedding", "Mahala_embedding"]: #"one-hot",
+        for seed in range(3):
+            setting_dict["Seed"] = seed
+            setting_dict["Data"]["mode"] = mode
+            train_model(setting_dict)
+
+'''
 batchSize=64
 lrate = 0.0002
 
@@ -146,7 +290,7 @@ modelbest = PATH + "_weights_best.hdf5"
 #                             save_weights_only=True, mode='auto', save_freq='epoch')
 checkpoint = ModelCheckpoint(modelbest, monitor='val_loss', verbose=1, save_best_only=True,
                              save_weights_only=True, mode='auto', save_freq='epoch')
-'''
+
 # Try with subset
 
 #cities_patches = cities_patches[:1000,:,:,:]
@@ -166,7 +310,7 @@ validation_file = 'E:/Dateien/LCZ_Votes/validation_data.h5'
 validation_data = h5py.File(validation_file, 'r')
 x_val = np.array(validation_data.get("sen2"))
 y_val = np.array(validation_data.get("y"))
-'''
+
 trainNumber=train_patches.shape[0]
 validationNumber=val_patches.shape[0]
 
@@ -205,3 +349,4 @@ test_ece = ECE(test_preds_softmax, test_labels_one_hot, 10)
 # Validation ECE (with trafo)
 val_preds_softmax = np.exp(val_preds*3) / np.sum(np.exp(val_preds*3), axis=1, keepdims=True)
 val_ece = ECE(val_preds_softmax, val_labels_one_hot, 10)
+'''

@@ -29,7 +29,11 @@ cities_one_hot_named['City'] = np.array(cities_votes_named['City'])
 cities_patches = concatenate_cities_patches(city_list)
 indeces_out = np.array(cities_one_hot[cities_one_hot[6] != 0].index)
 cities_patches = np.delete(cities_patches, indeces_out, 0)
+
 # delete instances with vote for class 7
+
+# But before that, add vote counts of class 7 to class 3
+cities_one_hot[3] = cities_one_hot[3] + cities_one_hot[6]
 
 cities_one_hot_16 = cities_one_hot.drop(cities_one_hot[cities_one_hot[6] != 0].index)
 cities_one_hot_16 = cities_one_hot_16.drop(columns=[6])

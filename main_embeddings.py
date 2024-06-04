@@ -1,4 +1,4 @@
-import model_softmax
+import model_without_softmax
 #import model
 import lr
 import numpy as np
