@@ -1,7 +1,7 @@
 Seed: 42
 Data:
     base_dir: "data/"
-    train_batch_size: 64
+    train_batch_size: 128
     dropout: 0.2
     fusion: 1
     val_batch_size: 64

@@ -14,7 +14,7 @@ import h5py
 import gc
 
 from dataLoader import generator
-from Loss import dirichlet_kl_divergence, mahala_dist_cov, mahala_dist_corr
+from Loss import dirichlet_kl_divergence, mahala_dist_corr_urban
 from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 import scipy
 import scipy.stats
@@ -54,8 +54,8 @@ labels_for_separation = np.array(data_embedding.get("y_distributional"))
 #id_indices = np.where(one_hot_labels[:,0:9] == 1)[0]
 #ood_indices = np.where(one_hot_labels[:,9:16] == 1)[0]
 
-id_indices=np.where(np.argmax(labels_for_separation, 1) < 10)[0]
-ood_indices=np.where(np.argmax(labels_for_separation,1)>9)[0]
+id_indices=np.where(np.argmax(labels_for_separation, 1) < 9)[0]
+ood_indices=np.where(np.argmax(labels_for_separation,1)>8)[0]
 #Train Val Test Split ID
 patches_id = patches[id_indices,:,:,:]
 
@@ -85,7 +85,7 @@ def train_model(setting_dict: dict):
         model = model_with_softmax.sen2LCZ_drop(depth=17,
                                            dropRate=setting_dict["Data"]["dropout"],
                                            fusion=setting_dict["Data"]["fusion"],
-                                           num_classes=setting_dict["Data"]["num_classes"])
+                                           num_classes=9)
         model.compile(optimizer=Nadam(),
                       loss=keras.losses.CategoricalCrossentropy(),
                       metrics=['accuracy'])
@@ -94,20 +94,29 @@ def train_model(setting_dict: dict):
         model = model_with_softmax.sen2LCZ_drop(depth=17,
                                                 dropRate=setting_dict["Data"]["dropout"],
                                                 fusion=setting_dict["Data"]["fusion"],
-                                                num_classes=setting_dict["Data"]["num_classes"])
+                                                num_classes=9)
         model.compile(optimizer=Nadam(),
                       loss='KLDivergence',
                       metrics=['KLDivergence'])
+        labels = np.array(data_embedding.get("y_distributional")).astype(np.float32)
+    elif mode == 'sampled_one-hot':
+        model = model_with_softmax.sen2LCZ_drop(depth=17,
+                                                dropRate=setting_dict["Data"]["dropout"],
+                                                fusion=setting_dict["Data"]["fusion"],
+                                                num_classes=9)
+        model.compile(optimizer=Nadam(),
+                      loss=keras.losses.CategoricalCrossentropy(),
+                      metrics=['accuracy'])
         labels = np.array(data_embedding.get("y_distributional")).astype(np.float32)
     elif mode == "dirichlet":
         model = model_without_softmax.sen2LCZ_drop(depth=17,
                                                 dropRate=setting_dict["Data"]["dropout"],
                                                 fusion=setting_dict["Data"]["fusion"],
-                                                num_classes=setting_dict["Data"]["num_classes"])
+                                                num_classes=9)
         model.compile(optimizer=Nadam(),
                       loss=dirichlet_kl_divergence,
                       metrics=[dirichlet_kl_divergence])
-        labels = np.array(data_embedding.get("y_one_hot")).astype(np.float32)
+        labels = np.array(data_embedding.get("y_distributional")).astype(np.float32)
         # 11 vote counts -> * 11, c=1 -> + 1
         labels = labels*11 + 1
         # Temperature Scaling of exponentiated labels w/ temperature = 3
@@ -116,7 +125,7 @@ def train_model(setting_dict: dict):
         model = model_without_softmax.sen2LCZ_drop(depth=17,
                                                    dropRate=setting_dict["Data"]["dropout"],
                                                    fusion=setting_dict["Data"]["fusion"],
-                                                   num_classes=setting_dict["Data"]["num_classes"])
+                                                   num_classes=9)
         model.compile(optimizer=Nadam(),
                       loss=dirichlet_kl_divergence,
                       metrics=[dirichlet_kl_divergence])
@@ -128,7 +137,7 @@ def train_model(setting_dict: dict):
         model = model_without_softmax.sen2LCZ_drop(depth=17,
                                                    dropRate=setting_dict["Data"]["dropout"],
                                                    fusion=setting_dict["Data"]["fusion"],
-                                                   num_classes=setting_dict["Data"]["num_classes"])
+                                                   num_classes=9)
         model.compile(optimizer=Nadam(),
                       loss=tf.keras.losses.MeanSquaredError(),
                       metrics=[tf.keras.losses.MeanSquaredError()])
@@ -137,14 +146,16 @@ def train_model(setting_dict: dict):
         model = model_without_softmax.sen2LCZ_drop(depth=17,
                                                    dropRate=setting_dict["Data"]["dropout"],
                                                    fusion=setting_dict["Data"]["fusion"],
-                                                   num_classes=setting_dict["Data"]["num_classes"])
+                                                   num_classes=9)
         model.compile(optimizer=Nadam(),
-                      loss=mahala_dist_corr,
-                      metrics=[mahala_dist_corr])
+                      loss=mahala_dist_corr_urban,
+                      metrics=[mahala_dist_corr_urban])
         labels = np.array(data_embedding.get("y")).astype(np.float32)
     print("Model compiled")
 
     labels_id = labels[id_indices, :9]
+    # Make sure that rowsums are 1
+    labels_id = labels_id / np.sum(labels_id, axis=1)[:, np.newaxis]
     labels_id = labels_id[shuffled_indices_id, :]
     labels_ood = labels[ood_indices, 9:16]
     labels_ood = labels_ood[shuffled_indices_ood, :]
@@ -210,8 +221,8 @@ args = parser.parse_args()
 ## Train models ##
 
 if __name__ == "__main__":
-    for mode in ["one-hot", "distributional", "dirichlet", "Dirichlet_embedding", "MSE_embedding", "Mahala_embedding"]:
-        for seed in range(3):
+    for mode in ["one-hot", "distributional"]: # , "sampled_one-hot", "dirichlet", "Dirichlet_embedding", "MSE_embedding", "Mahala_embedding"
+        for seed in range(1,5):
             setting_dict["Seed"] = seed
             setting_dict["Data"]["mode"] = mode
             train_model(setting_dict)
